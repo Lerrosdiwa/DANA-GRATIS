@@ -1,55 +1,166 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Musik Otomatis</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-family: sans-serif;
-            text-shadow: 2px 2px 5px black;
-            background: url('latar.jpg') no-repeat center center fixed;
-            background-size: cover;
-        }
-        .overlay {
-            background: rgba(0,0,0,0.4);
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Web Musik – Tap untuk Masuk</title>
+  <style>
+    :root {
+      /* === GANTI SESUAI FILE KAMU DI REPO === */
+      --bg-image: url('latar.jpg');   /* ganti ke link/ nama file gambar latar */
+      --audio-src: 'lagu.mp3';        /* ganti ke link/ nama file musik mp3 */
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: #fff;
+    }
+    /* Latar penuh */
+    .bg {
+      position: fixed;
+      inset: 0;
+      background: center/cover no-repeat var(--bg-image);
+      filter: brightness(0.85);
+    }
+    /* Overlay gelap tipis agar teks terbaca */
+    .scrim {
+      position: fixed; inset: 0; background: rgba(0,0,0,.35);
+    }
+    /* Layar pembuka */
+    .gate {
+      position: fixed; inset: 0;
+      display: grid; place-items: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      background: rgba(0,0,0,.45);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 20px;
+      padding: 24px 20px;
+      max-width: 520px;
+      width: 92%;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; font-weight: 700; }
+    p  { margin: 0 0 18px; line-height: 1.45; }
+    .btn {
+      appearance: none; border: 0; cursor: pointer;
+      padding: 12px 18px; border-radius: 999px;
+      font-weight: 700; font-size: 16px;
+      background: #22c55e; color: #081b0a;
+      box-shadow: 0 6px 20px rgba(34,197,94,.35);
+    }
+    .btn:active { transform: translateY(1px); }
+    /* Hint kecil jika autoplay gagal */
+    .hint {
+      margin-top: 10px;
+      font-size: 12px; opacity: .9;
+    }
+    /* Tombol mute/stop opsional di pojok */
+    .controls {
+      position: fixed; right: 10px; bottom: 10px;
+      display: flex; gap: 8px;
+    }
+    .ctrl {
+      background: rgba(0,0,0,.55);
+      color: #fff; border: 1px solid rgba(255,255,255,.25);
+      padding: 8px 12px; border-radius: 12px; font-size: 14px;
+    }
+    .ctrl:active { transform: translateY(1px); }
+    /* Sembunyikan dengan kelas .hide */
+    .hide { display: none !important; }
+  </style>
 </head>
 <body>
-    <div class="overlay">
-        <h1>Selamat Datang!</h1>
-        <p>Musik akan otomatis diputar.</p>
+  <!-- Latar -->
+  <div class="bg" aria-hidden="true"></div>
+  <div class="scrim" aria-hidden="true"></div>
+
+  <!-- Layar pembuka (wajib tap sekali untuk memulai audio) -->
+  <section class="gate" id="gate">
+    <div class="card">
+      <h1>Selamat Datang</h1>
+      <p>Ketuk tombol di bawah untuk masuk. Musik akan diputar dan halaman terbuka.</p>
+      <button class="btn" id="enterBtn">🎵 Masuk & Putar Musik</button>
+      <div class="hint" id="hint">Jika tidak terdengar musik, ketuk sekali lagi.</div>
     </div>
+  </section>
 
-    <audio id="music" autoplay loop>
-        <source src="lagu.mp3" type="audio/mpeg">
-        Browser Anda tidak mendukung pemutar audio.
-    </audio>
+  <!-- Pemutar (disembunyikan UI-nya) -->
+  <audio id="player" preload="auto" loop playsinline>
+    <!-- src di-set via JS dari variabel --audio-src agar mudah diganti -->
+    Browser Anda tidak mendukung audio.
+  </audio>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var audio = document.getElementById('music');
-            var playPromise = audio.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(() => {
-                    document.body.addEventListener('touchstart', () => {
-                        audio.play();
-                    }, { once: true });
-                });
-            }
-        });
-    </script>
+  <!-- Kontrol opsional -->
+  <div class="controls">
+    <button class="ctrl" id="muteBtn">Mute</button>
+    <button class="ctrl" id="stopBtn">Stop</button>
+  </div>
+
+  <script>
+    // Ambil nilai dari CSS variable
+    const audioSrc = getComputedStyle(document.documentElement)
+                      .getPropertyValue('--audio-src').trim().replace(/^['"]|['"]$/g, '');
+    const player   = document.getElementById('player');
+    const gate     = document.getElementById('gate');
+    const enterBtn = document.getElementById('enterBtn');
+    const hint     = document.getElementById('hint');
+    const muteBtn  = document.getElementById('muteBtn');
+    const stopBtn  = document.getElementById('stopBtn');
+
+    // Set sumber audio
+    player.src = audioSrc;
+
+    // Helper: coba play dan tangani error autoplay
+    async function tryPlay() {
+      try {
+        await player.play();
+        return true;
+      } catch (e) {
+        console.warn('Autoplay gagal:', e);
+        return false;
+      }
+    }
+
+    // Saat tombol "Masuk" ditekan → mulai musik, sembunyikan gate
+    enterBtn.addEventListener('click', async () => {
+      // Pastikan tidak mute
+      player.muted = false;
+      const ok = await tryPlay();
+      if (ok) {
+        gate.classList.add('hide');
+      } else {
+        // Jika tetap gagal (jarang), beri instruksi singkat
+        hint.textContent = 'Autoplay diblokir. Ketuk tombol lagi untuk memulai.';
+      }
+    });
+
+    // Cadangan: kalau user menyentuh layar di mana pun sebelum menekan tombol
+    document.addEventListener('touchstart', async function once() {
+      if (!gate.classList.contains('hide')) {
+        player.muted = false;
+        await tryPlay();
+      }
+      document.removeEventListener('touchstart', once);
+    }, { passive: true });
+
+    // Kontrol opsional
+    muteBtn.addEventListener('click', () => {
+      player.muted = !player.muted;
+      muteBtn.textContent = player.muted ? 'Unmute' : 'Mute';
+    });
+    stopBtn.addEventListener('click', () => {
+      player.pause();
+      player.currentTime = 0;
+      gate.classList.remove('hide'); // munculkan lagi gate jika mau
+    });
+
+    // (Opsional) Prefetch: coba load cepat
+    player.load();
+  </script>
 </body>
 </html>
